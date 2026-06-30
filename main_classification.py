@@ -35,7 +35,7 @@ def tuple_type(strings):
     return tuple(mapped_int)
 
 def get_args_parser():
-    parser = argparse.ArgumentParser("segmentation", add_help=False)
+    parser = argparse.ArgumentParser("classification", add_help=False)
     parser.add_argument(
         "--batch_size",
         default=1,
