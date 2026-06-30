@@ -32,69 +32,6 @@ DEFAULT_METRICS = ("test_auc", "test_balanced_acc", "test_sens_at_80_spec")
 PER_SEED_PRIMARY_METRICS = ("test_auc", "test_balanced_acc", "test_sens_at_80_spec")
 
 
-def normal_cdf(value):
-    return 0.5 * (1.0 + math.erf(value / math.sqrt(2.0)))
-
-
-def normal_ppf(probability):
-    """Inverse standard-normal CDF using Peter J. Acklam's approximation."""
-    if not 0.0 < probability < 1.0:
-        raise ValueError("probability must be in (0, 1)")
-
-    a = [
-        -3.969683028665376e01,
-        2.209460984245205e02,
-        -2.759285104469687e02,
-        1.383577518672690e02,
-        -3.066479806614716e01,
-        2.506628277459239e00,
-    ]
-    b = [
-        -5.447609879822406e01,
-        1.615858368580409e02,
-        -1.556989798598866e02,
-        6.680131188771972e01,
-        -1.328068155288572e01,
-    ]
-    c = [
-        -7.784894002430293e-03,
-        -3.223964580411365e-01,
-        -2.400758277161838e00,
-        -2.549732539343734e00,
-        4.374664141464968e00,
-        2.938163982698783e00,
-    ]
-    d = [
-        7.784695709041462e-03,
-        3.224671290700398e-01,
-        2.445134137142996e00,
-        3.754408661907416e00,
-    ]
-    plow = 0.02425
-    phigh = 1.0 - plow
-
-    if probability < plow:
-        q = math.sqrt(-2.0 * math.log(probability))
-        return (
-            (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
-            / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0)
-        )
-    if probability <= phigh:
-        q = probability - 0.5
-        r = q * q
-        return (
-            (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
-            * q
-            / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0)
-        )
-
-    q = math.sqrt(-2.0 * math.log(1.0 - probability))
-    return -(
-        (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
-        / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0)
-    )
-
-
 def regularized_beta(x, a, b):
     """Regularized incomplete beta I_x(a, b), using a continued fraction."""
     if x < 0.0 or x > 1.0:
@@ -383,123 +320,6 @@ def baseline_seed_bootstrap(
         "ci_low": percentile(means_sorted, alpha / 2.0),
         "ci_high": percentile(means_sorted, 1.0 - alpha / 2.0),
         "note": f"baseline mean CI; seed bootstrap iterations={len(means)}",
-    }
-
-
-def class_counts_from_thresholds(data, prefix="test"):
-    tn = data.get(f"{prefix}_threshold_default_0_5_tn")
-    fp = data.get(f"{prefix}_threshold_default_0_5_fp")
-    fn = data.get(f"{prefix}_threshold_default_0_5_fn")
-    tp = data.get(f"{prefix}_threshold_default_0_5_tp")
-    if None in {tn, fp, fn, tp}:
-        return None
-    return int(tn), int(fp), int(fn), int(tp)
-
-
-def auc_hanley_mcneil_se(auc_percent, n_negative, n_positive):
-    if n_negative <= 0 or n_positive <= 0:
-        return None
-    auc = auc_percent / 100.0
-    if auc <= 0.0 or auc >= 1.0:
-        return 0.0
-    q1 = auc / (2.0 - auc)
-    q2 = 2.0 * auc * auc / (1.0 + auc)
-    variance = (
-        auc * (1.0 - auc)
-        + (n_positive - 1) * (q1 - auc * auc)
-        + (n_negative - 1) * (q2 - auc * auc)
-    ) / (n_positive * n_negative)
-    return math.sqrt(max(variance, 0.0)) * 100.0
-
-
-def balanced_acc_se_from_counts(tn, fp, fn, tp):
-    n_negative = tn + fp
-    n_positive = tp + fn
-    if n_negative <= 0 or n_positive <= 0:
-        return None
-    sensitivity = tp / n_positive
-    specificity = tn / n_negative
-    variance = 0.25 * (
-        sensitivity * (1.0 - sensitivity) / n_positive
-        + specificity * (1.0 - specificity) / n_negative
-    )
-    return math.sqrt(max(variance, 0.0)) * 100.0
-
-
-def aggregate_metric_se(metric, data):
-    counts = class_counts_from_thresholds(data)
-    if counts is None:
-        return None, "missing_default_threshold_counts"
-    tn, fp, fn, tp = counts
-    if metric == "test_auc":
-        return auc_hanley_mcneil_se(data[metric], tn + fp, tp + fn), (
-            "Hanley-McNeil AUROC SE; independent-model delta approximation"
-        )
-    if metric == "test_balanced_acc":
-        return balanced_acc_se_from_counts(tn, fp, fn, tp), (
-            "binomial sensitivity/specificity balanced-accuracy SE; "
-            "independent-model delta approximation"
-        )
-    return None, "single-seed aggregate inference is implemented for test_auc and test_balanced_acc only"
-
-
-def single_seed_aggregate_test(
-    baseline_data, target_data, metric, confidence=0.95
-):
-    if metric not in baseline_data or metric not in target_data:
-        return None
-
-    baseline_value = float(baseline_data[metric])
-    target_value = float(target_data[metric])
-    mean_delta = target_value - baseline_value
-    baseline_se, baseline_note = aggregate_metric_se(metric, baseline_data)
-    target_se, target_note = aggregate_metric_se(metric, target_data)
-    if baseline_se is None or target_se is None:
-        return {
-            "analysis_method": "single_seed_aggregate_only",
-            "statistic_type": None,
-            "statistic": None,
-            "n": 1,
-            "mean_delta": mean_delta,
-            "sd_delta": None,
-            "sem_delta": None,
-            "diff_se": None,
-            "baseline_se": baseline_se,
-            "target_se": target_se,
-            "t_stat": None,
-            "df": None,
-            "p_two_sided": None,
-            "ci_low": None,
-            "ci_high": None,
-            "note": baseline_note if baseline_se is None else target_note,
-        }
-
-    diff_se = math.sqrt(baseline_se * baseline_se + target_se * target_se)
-    alpha = 1.0 - confidence
-    critical = normal_ppf(1.0 - alpha / 2.0)
-    if diff_se == 0.0:
-        statistic = math.inf if mean_delta > 0 else -math.inf if mean_delta < 0 else 0.0
-        p_two_sided = 0.0 if mean_delta != 0 else 1.0
-    else:
-        statistic = mean_delta / diff_se
-        p_two_sided = min(1.0, max(0.0, 2.0 * (1.0 - normal_cdf(abs(statistic)))))
-    return {
-        "analysis_method": "single_seed_approx_z",
-        "statistic_type": "z",
-        "statistic": statistic,
-        "n": 1,
-        "mean_delta": mean_delta,
-        "sd_delta": None,
-        "sem_delta": None,
-        "diff_se": diff_se,
-        "baseline_se": baseline_se,
-        "target_se": target_se,
-        "t_stat": None,
-        "df": None,
-        "p_two_sided": p_two_sided,
-        "ci_low": mean_delta - critical * diff_se,
-        "ci_high": mean_delta + critical * diff_se,
-        "note": baseline_note,
     }
 
 
@@ -1810,45 +1630,18 @@ def build_rows(args):
                 differences.append(target_value - baseline_value)
                 seed_list.append(seed)
 
-            if len(differences) == 1:
-                baseline_file = metric_file_for_seed(
-                    args.root,
-                    args.baseline,
-                    args.model,
-                    args.train_mode,
-                    seed_list[0],
-                    args.selection,
-                    args.metric_prefix,
-                )
-                target_file = metric_file_for_seed(
-                    args.root,
-                    target,
-                    args.model,
-                    args.train_mode,
-                    seed_list[0],
-                    args.selection,
-                    args.metric_prefix,
-                )
-                stats = single_seed_aggregate_test(
-                    read_metric_json(baseline_file),
-                    read_metric_json(target_file),
-                    metric,
-                    confidence=args.confidence,
-                )
-                stats_list = [stats]
-            else:
-                stats_list = []
-                if args.aggregate_test in {"paired_ttest", "both"}:
-                    stats_list.append(paired_ttest(differences, confidence=args.confidence))
-                if args.aggregate_test in {"seed_paired_bootstrap", "both"}:
-                    stats_list.append(
-                        paired_seed_bootstrap(
-                            differences,
-                            confidence=args.confidence,
-                            n_bootstraps=args.seed_bootstrap_iterations,
-                            random_seed=args.seed_bootstrap_seed,
-                        )
+            stats_list = []
+            if args.aggregate_test in {"paired_ttest", "both"}:
+                stats_list.append(paired_ttest(differences, confidence=args.confidence))
+            if args.aggregate_test in {"seed_paired_bootstrap", "both"}:
+                stats_list.append(
+                    paired_seed_bootstrap(
+                        differences,
+                        confidence=args.confidence,
+                        n_bootstraps=args.seed_bootstrap_iterations,
+                        random_seed=args.seed_bootstrap_seed,
                     )
+                )
             baseline_mean = (
                 sum(baseline_values) / len(baseline_values) if baseline_values else None
             )
@@ -1872,8 +1665,6 @@ def build_rows(args):
                     row["note"] = (row["note"] + "; " if row["note"] else "") + (
                         "metric missing for seeds: " + ",".join(missing)
                     )
-                if args.omit_single_seed_ttest_note and row.get("analysis_method") == "not_run_single_seed":
-                    row["note"] = ""
                 rows.append(row)
     return rows
 
@@ -1989,10 +1780,8 @@ def parse_args():
         default="holistic",
         help=(
             "holistic writes a stable schema with comparison and paired-test "
-            "columns. auto writes compact delta columns for single-seed results "
-            "and full paired-test columns once at least one comparison has >=2 "
-            "matched seeds. For per_seed, full includes paths and baseline_* "
-            "columns; other modes write a compact metric/delta table."
+            "columns. For per_seed, full includes paths and baseline_* columns; "
+            "other modes write a compact metric/delta table."
         ),
     )
     parser.add_argument(
@@ -2063,14 +1852,6 @@ def parse_args():
         type=int,
         default=0,
         help="Random seed for seed-level aggregate bootstrap resampling.",
-    )
-    parser.add_argument(
-        "--omit_single_seed_ttest_note",
-        action="store_true",
-        help=(
-            "Suppress the explanatory note for rows with fewer than two matched "
-            "seeds. The default keeps the note to avoid implying a t-test was run."
-        ),
     )
     return parser.parse_args()
 
