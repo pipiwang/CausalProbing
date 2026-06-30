@@ -32,170 +32,6 @@ DEFAULT_METRICS = ("test_auc", "test_balanced_acc", "test_sens_at_80_spec")
 PER_SEED_PRIMARY_METRICS = ("test_auc", "test_balanced_acc", "test_sens_at_80_spec")
 
 
-def regularized_beta(x, a, b):
-    """Regularized incomplete beta I_x(a, b), using a continued fraction."""
-    if x < 0.0 or x > 1.0:
-        raise ValueError("x must be in [0, 1]")
-    if x == 0.0:
-        return 0.0
-    if x == 1.0:
-        return 1.0
-
-    max_iter = 200
-    eps = 3.0e-14
-    fpmin = 1.0e-300
-
-    def beta_fraction(x_value, a_value, b_value):
-        qab = a_value + b_value
-        qap = a_value + 1.0
-        qam = a_value - 1.0
-        c = 1.0
-        d = 1.0 - qab * x_value / qap
-        if abs(d) < fpmin:
-            d = fpmin
-        d = 1.0 / d
-        h = d
-
-        for m in range(1, max_iter + 1):
-            m2 = 2 * m
-            aa = m * (b_value - m) * x_value / (
-                (qam + m2) * (a_value + m2)
-            )
-            d = 1.0 + aa * d
-            if abs(d) < fpmin:
-                d = fpmin
-            c = 1.0 + aa / c
-            if abs(c) < fpmin:
-                c = fpmin
-            d = 1.0 / d
-            h *= d * c
-
-            aa = -(
-                (a_value + m)
-                * (qab + m)
-                * x_value
-                / ((a_value + m2) * (qap + m2))
-            )
-            d = 1.0 + aa * d
-            if abs(d) < fpmin:
-                d = fpmin
-            c = 1.0 + aa / c
-            if abs(c) < fpmin:
-                c = fpmin
-            d = 1.0 / d
-            delta = d * c
-            h *= delta
-            if abs(delta - 1.0) <= eps:
-                break
-        return h
-
-    log_beta_term = (
-        math.lgamma(a + b)
-        - math.lgamma(a)
-        - math.lgamma(b)
-        + a * math.log(x)
-        + b * math.log1p(-x)
-    )
-    beta_term = math.exp(log_beta_term)
-
-    if x < (a + 1.0) / (a + b + 2.0):
-        return beta_term * beta_fraction(x, a, b) / a
-    return 1.0 - beta_term * beta_fraction(1.0 - x, b, a) / b
-
-
-def student_t_cdf(t_value, df):
-    if df <= 0:
-        return float("nan")
-    if t_value == 0:
-        return 0.5
-    x = df / (df + t_value * t_value)
-    ib = regularized_beta(x, df / 2.0, 0.5)
-    if t_value > 0:
-        return 1.0 - 0.5 * ib
-    return 0.5 * ib
-
-
-def student_t_ppf(probability, df):
-    if not 0.0 < probability < 1.0:
-        raise ValueError("probability must be in (0, 1)")
-    if probability == 0.5:
-        return 0.0
-    sign = 1.0
-    p = probability
-    if probability < 0.5:
-        sign = -1.0
-        p = 1.0 - probability
-
-    lo, hi = 0.0, 1.0
-    while student_t_cdf(hi, df) < p:
-        hi *= 2.0
-        if hi > 1.0e6:
-            break
-    for _ in range(100):
-        mid = (lo + hi) / 2.0
-        if student_t_cdf(mid, df) < p:
-            lo = mid
-        else:
-            hi = mid
-    return sign * (lo + hi) / 2.0
-
-
-def paired_ttest(differences, confidence=0.95):
-    n = len(differences)
-    if n < 2:
-        return {
-            "analysis_method": "not_run_single_seed",
-            "statistic_type": None,
-            "statistic": None,
-            "n": n,
-            "mean_delta": differences[0] if n == 1 else None,
-            "sd_delta": None,
-            "sem_delta": None,
-            "t_stat": None,
-            "df": None,
-            "p_two_sided": None,
-            "ci_low": None,
-            "ci_high": None,
-            "note": "paired t-test requires at least two matched seeds",
-        }
-
-    mean_delta = sum(differences) / n
-    variance = sum((value - mean_delta) ** 2 for value in differences) / (n - 1)
-    sd_delta = math.sqrt(variance)
-    sem_delta = sd_delta / math.sqrt(n)
-    df = n - 1
-
-    if sem_delta == 0.0:
-        t_stat = math.inf if mean_delta > 0 else -math.inf if mean_delta < 0 else 0.0
-        p_two_sided = 0.0 if mean_delta != 0 else 1.0
-        ci_low = mean_delta
-        ci_high = mean_delta
-    else:
-        t_stat = mean_delta / sem_delta
-        tail = 1.0 - student_t_cdf(abs(t_stat), df)
-        p_two_sided = min(1.0, max(0.0, 2.0 * tail))
-        alpha = 1.0 - confidence
-        critical = student_t_ppf(1.0 - alpha / 2.0, df)
-        ci_low = mean_delta - critical * sem_delta
-        ci_high = mean_delta + critical * sem_delta
-
-    return {
-        "analysis_method": "paired_seed_ttest",
-        "statistic_type": "t",
-        "statistic": t_stat,
-        "n": n,
-        "mean_delta": mean_delta,
-        "sd_delta": sd_delta,
-        "sem_delta": sem_delta,
-        "t_stat": t_stat,
-        "df": df,
-        "p_two_sided": p_two_sided,
-        "ci_low": ci_low,
-        "ci_high": ci_high,
-        "note": "",
-    }
-
-
 def paired_seed_bootstrap(
     differences,
     confidence=0.95,
@@ -215,8 +51,6 @@ def paired_seed_bootstrap(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -251,8 +85,6 @@ def paired_seed_bootstrap(
         "diff_se": sd_delta,
         "baseline_se": None,
         "target_se": None,
-        "t_stat": None,
-        "df": None,
         "p_two_sided": p_two_sided,
         "ci_low": percentile(deltas_sorted, alpha / 2.0),
         "ci_high": percentile(deltas_sorted, 1.0 - alpha / 2.0),
@@ -280,8 +112,6 @@ def baseline_seed_bootstrap(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -314,8 +144,6 @@ def baseline_seed_bootstrap(
         "diff_se": None,
         "baseline_se": sd_mean,
         "target_se": None,
-        "t_stat": None,
-        "df": None,
         "p_two_sided": None,
         "ci_low": percentile(means_sorted, alpha / 2.0),
         "ci_high": percentile(means_sorted, 1.0 - alpha / 2.0),
@@ -942,8 +770,6 @@ def paired_bootstrap_test(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -964,8 +790,6 @@ def paired_bootstrap_test(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -1002,8 +826,6 @@ def paired_bootstrap_test(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -1035,8 +857,6 @@ def paired_bootstrap_test(
         "diff_se": sd_delta,
         "baseline_se": None,
         "target_se": None,
-        "t_stat": None,
-        "df": None,
         "p_two_sided": p_two_sided,
         "ci_low": percentile(deltas_sorted, alpha / 2.0),
         "ci_high": percentile(deltas_sorted, 1.0 - alpha / 2.0),
@@ -1064,8 +884,6 @@ def baseline_prediction_bootstrap_test(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -1085,8 +903,6 @@ def baseline_prediction_bootstrap_test(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -1120,8 +936,6 @@ def baseline_prediction_bootstrap_test(
             "diff_se": None,
             "baseline_se": None,
             "target_se": None,
-            "t_stat": None,
-            "df": None,
             "p_two_sided": None,
             "ci_low": None,
             "ci_high": None,
@@ -1150,8 +964,6 @@ def baseline_prediction_bootstrap_test(
         "diff_se": None,
         "baseline_se": sd_value,
         "target_se": None,
-        "t_stat": None,
-        "df": None,
         "p_two_sided": None,
         "ci_low": percentile(values_sorted, alpha / 2.0),
         "ci_high": percentile(values_sorted, 1.0 - alpha / 2.0),
@@ -1207,8 +1019,6 @@ def result_columns(rows, table_mode, analysis=None):
         "ci_high",
         "statistic_type",
         "statistic",
-        "t_stat",
-        "df",
         "p_two_sided",
         "note",
     ]
@@ -1234,8 +1044,6 @@ def result_columns(rows, table_mode, analysis=None):
         "ci_high",
         "statistic_type",
         "statistic",
-        "t_stat",
-        "df",
         "p_two_sided",
         "note",
     ]
@@ -1248,7 +1056,7 @@ def result_columns(rows, table_mode, analysis=None):
     if compact_output:
         for row in rows:
             if (row.get("n") or 0) < 2 and row.get("note") == (
-                "paired t-test requires at least two matched seeds"
+                "seed-paired bootstrap requires at least two matched seeds"
             ):
                 row["note"] = ""
         return compact_columns
@@ -1630,18 +1438,14 @@ def build_rows(args):
                 differences.append(target_value - baseline_value)
                 seed_list.append(seed)
 
-            stats_list = []
-            if args.aggregate_test in {"paired_ttest", "both"}:
-                stats_list.append(paired_ttest(differences, confidence=args.confidence))
-            if args.aggregate_test in {"seed_paired_bootstrap", "both"}:
-                stats_list.append(
-                    paired_seed_bootstrap(
-                        differences,
-                        confidence=args.confidence,
-                        n_bootstraps=args.seed_bootstrap_iterations,
-                        random_seed=args.seed_bootstrap_seed,
-                    )
+            stats_list = [
+                paired_seed_bootstrap(
+                    differences,
+                    confidence=args.confidence,
+                    n_bootstraps=args.seed_bootstrap_iterations,
+                    random_seed=args.seed_bootstrap_seed,
                 )
+            ]
             baseline_mean = (
                 sum(baseline_values) / len(baseline_values) if baseline_values else None
             )
@@ -1702,7 +1506,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=(
             "Compare Gleason baseline vs adversarial ruleout metric JSONs with "
-            "paired t-tests across matched seed directories."
+            "bootstrap tests across matched seed directories."
         )
     )
     parser.add_argument(
@@ -1793,15 +1597,6 @@ def parse_args():
             "saved per-scan prediction CSVs and uses clustered paired bootstrap "
             "for metric differences. per_seed writes one row per seed metric "
             "JSON with same-seed baseline deltas."
-        ),
-    )
-    parser.add_argument(
-        "--aggregate_test",
-        choices=["paired_ttest", "seed_paired_bootstrap", "both"],
-        default="paired_ttest",
-        help=(
-            "Statistical test for aggregate metric JSONs across matched seeds. "
-            "Use both to emit paired t-test and seed-paired bootstrap rows."
         ),
     )
     parser.add_argument(

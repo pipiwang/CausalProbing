@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # This uses metric JSON files by default. For each matched seed, it computes:
 #   delta = ruleout_metric - baseline_metric
-# and runs paired tests over seed-level deltas.
+# and runs seed-paired bootstrap tests over seed-level deltas.
 #
 # Usage from the code/project directory:
 #   bash script/run_analyze_gleason_ruleout_seed_paired_ordinal.sh
@@ -26,7 +26,6 @@ MODEL=${MODEL:-profound_conv}
 TRAIN_MODE=${TRAIN_MODE:-fintune}
 SELECTION=${SELECTION:-best_qwk}
 METRICS=${METRICS:-test_qwk test_auc test_balanced_acc}
-AGGREGATE_TEST=${AGGREGATE_TEST:-both}
 SEED_BOOTSTRAP_ITERATIONS=${SEED_BOOTSTRAP_ITERATIONS:-10000}
 SEED_BOOTSTRAP_SEED=${SEED_BOOTSTRAP_SEED:-0}
 TARGETS=${TARGETS:-}
@@ -48,7 +47,6 @@ CMD=(
   --train_mode "${TRAIN_MODE}"
   --selection "${SELECTION}"
   --metrics ${METRICS}
-  --aggregate_test "${AGGREGATE_TEST}"
   --seed_bootstrap_iterations "${SEED_BOOTSTRAP_ITERATIONS}"
   --seed_bootstrap_seed "${SEED_BOOTSTRAP_SEED}"
   --table_mode holistic

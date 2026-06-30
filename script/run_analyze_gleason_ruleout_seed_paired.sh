@@ -6,7 +6,7 @@ set -euo pipefail
 # This uses metric JSON files, not per-scan prediction CSVs. For each matched
 # seed, it computes:
 #   delta = ruleout_metric - baseline_metric
-# and runs paired tests over seed-level deltas.
+# and runs seed-paired bootstrap tests over seed-level deltas.
 #
 # Usage from the code/project directory:
 #   bash script/run_analyze_gleason_ruleout_seed_paired.sh
@@ -29,7 +29,6 @@ MODEL=${MODEL:-profound_conv}
 TRAIN_MODE=${TRAIN_MODE:-fintune}
 SELECTION=${SELECTION:-best_auc}
 METRICS=${METRICS:-test_auc test_balanced_acc test_sens_at_80_spec}
-AGGREGATE_TEST=${AGGREGATE_TEST:-both}
 SEED_BOOTSTRAP_ITERATIONS=${SEED_BOOTSTRAP_ITERATIONS:-10000}
 SEED_BOOTSTRAP_SEED=${SEED_BOOTSTRAP_SEED:-0}
 TARGETS=${TARGETS:-}
@@ -56,7 +55,6 @@ CMD=(
   --train_mode "${TRAIN_MODE}"
   --selection "${SELECTION}"
   --metrics ${METRICS}
-  --aggregate_test "${AGGREGATE_TEST}"
   --seed_bootstrap_iterations "${SEED_BOOTSTRAP_ITERATIONS}"
   --seed_bootstrap_seed "${SEED_BOOTSTRAP_SEED}"
   --table_mode holistic

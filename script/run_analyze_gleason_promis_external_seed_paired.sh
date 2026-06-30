@@ -23,7 +23,6 @@ TRAIN_MODE=${TRAIN_MODE:-fintune}
 TASK_TYPE=${TASK_TYPE:-binary}
 BINARY_POSITIVE_MIN=${BINARY_POSITIVE_MIN:-2}
 ORDINAL_LEVELS=${ORDINAL_LEVELS:-5}
-AGGREGATE_TEST=${AGGREGATE_TEST:-both}
 SEED_BOOTSTRAP_ITERATIONS=${SEED_BOOTSTRAP_ITERATIONS:-10000}
 SEED_BOOTSTRAP_SEED=${SEED_BOOTSTRAP_SEED:-0}
 BOOTSTRAP_ITERATIONS=${BOOTSTRAP_ITERATIONS:-10000}
@@ -120,7 +119,6 @@ CMD=(
   --metric_prefix promis_external_metrics
   --prediction_prefix promis_external_predictions
   --metrics ${METRICS}
-  --aggregate_test "${AGGREGATE_TEST}"
   --seed_bootstrap_iterations "${SEED_BOOTSTRAP_ITERATIONS}"
   --seed_bootstrap_seed "${SEED_BOOTSTRAP_SEED}"
   --bootstrap_iterations "${BOOTSTRAP_ITERATIONS}"
