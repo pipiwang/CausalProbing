@@ -50,7 +50,7 @@ PROMIS prostate MRI data can be downloaded from
 [Zenodo record 15683922](https://zenodo.org/records/15683922).
 
 The ProFound encoder code and pretrained checkpoints can be found at
-[pipiwang/ProFound](https://github.com/pipiwang/ProFound). By default, this
+[ProFound](https://github.com/pipiwang/ProFound). By default, this
 repository expects ProFound checkpoints under:
 
 ```text
