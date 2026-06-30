@@ -1,0 +1,59 @@
+# OS/editor noise
+.DS_Store
+*.DS_Store
+.vscode/
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Local data, manifests, and preprocessing outputs
+data/
+cache/
+preprocessed/
+*.csv
+*.tsv
+*.nii
+*.nii.gz
+*.nrrd
+*.mha
+*.mhd
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+
+# Training outputs, logs, checkpoints, and figures
+logs/
+log_hpc/
+output/
+output_*/
+output_cls/
+output_cls_*/
+results/
+runs/
+wandb/
+figures/
+figure/
+*.log
+*.out
+*.err
+*.ckpt
+*.pth
+*.pth.tar
+*.pt
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Cluster launchers are not part of the public release
+*.slurm
