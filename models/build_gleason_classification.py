@@ -5,19 +5,15 @@ import torch
 from models.convnextv2 import convnextv2_tiny, load_state_dict, remap_checkpoint_keys
 from models.gleason_classifier import GleasonClassifier
 from models.resnet18 import resnet18_3D
-from models.vit import vit_base_patch16_dec512d8b
 from util.convnext_optim import LayerDecayValueAssigner, get_parameter_groups
 from util.gleason_config import resolve_adversarial_config
 from util.lars import LARS
-from util.lr_decay import param_groups_lrd
-from util.paths import PROFOUND_CONV_CHECKPOINT, PROFOUND_VIT_CHECKPOINT
+from util.paths import PROFOUND_CONV_CHECKPOINT
 
 
 def default_pretrain_path(model_name):
     if model_name == "profound_conv":
         return str(PROFOUND_CONV_CHECKPOINT)
-    if model_name == "profound_vit":
-        return str(PROFOUND_VIT_CHECKPOINT)
     return None
 
 
@@ -43,20 +39,6 @@ def build_encoder(args):
         ckpt = load_trusted_checkpoint(args.pretrain)
         ckpt = remap_checkpoint_keys(ckpt)
         load_state_dict(encoder, ckpt)
-        return encoder
-
-    if args.model == "profound_vit":
-        encoder = vit_base_patch16_dec512d8b(in_chans=args.in_channels)
-        if args.pretrain is None and args.train != "scratch":
-            args.pretrain = default_pretrain_path(args.model)
-        if args.pretrain is None:
-            return encoder
-        if not os.path.exists(args.pretrain):
-            raise FileExistsError(f"{args.pretrain} Not exists")
-        msg = encoder.load_state_dict(
-            load_trusted_checkpoint(args.pretrain)["model"], strict=False
-        )
-        print(msg.missing_keys)
         return encoder
 
     raise NotImplementedError(f"unknown model: {args.model}")
@@ -95,14 +77,6 @@ def build_gleason_model(args, device):
             skip,
             assigner.get_layer_id,
             assigner.get_scale,
-        )
-        head_param_groups = [
-            {"params": model.head_parameters(), "weight_decay": 0.0, "lr": args.lr}
-        ]
-        optimizer = torch.optim.AdamW(backbone_param_groups + head_param_groups, lr=args.lr)
-    elif args.model == "profound_vit":
-        backbone_param_groups = param_groups_lrd(
-            model.encoder, weight_decay=args.weight_decay, layer_decay=args.layer_decay
         )
         head_param_groups = [
             {"params": model.head_parameters(), "weight_decay": 0.0, "lr": args.lr}

@@ -6,7 +6,6 @@ DATA_ROOT = PROJECT_ROOT / "data"
 RAW_IMAGE_ROOT = Path("data/raw_mri")
 PROFOUND_CHECKPOINT_DIR = PROJECT_ROOT / "checkpoints"
 PROFOUND_CONV_CHECKPOINT = PROFOUND_CHECKPOINT_DIR / "profound_conv_checkpoint-799.pth"
-PROFOUND_VIT_CHECKPOINT = PROFOUND_CHECKPOINT_DIR / "profound_vit_checkpoint-799.pth"
 
 META_INFO_PROCESSED_CSV = DATA_ROOT / "meta_info_processed.csv"
 META_INFO_CLEANED_CSV = DATA_ROOT / "meta_info_cleaned.csv"

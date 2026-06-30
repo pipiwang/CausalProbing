@@ -55,7 +55,6 @@ repository expects ProFound checkpoints under:
 
 ```text
 checkpoints/profound_conv_checkpoint-799.pth
-checkpoints/profound_vit_checkpoint-799.pth
 ```
 
 You can also pass a checkpoint path explicitly with `--pretrain`.

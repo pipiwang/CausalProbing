@@ -116,7 +116,7 @@ class LayerNorm(nn.Module):
                 x, self.normalized_shape, self.weight, self.bias, self.eps
             )
         elif self.data_format == "channels_first":
-            if len(x.shape) == 3: # for vit adapter
+            if len(x.shape) == 3:
                 u = x.mean(1, keepdim=True)
                 s = (x - u).pow(2).mean(1, keepdim=True)
                 x = (x - u) / torch.sqrt(s + self.eps)

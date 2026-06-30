@@ -207,7 +207,7 @@ def get_args_parser():
 
     parser.add_argument(
         "--model",
-        choices=["resnet18", "profound_conv", "profound_vit"],
+        choices=["resnet18", "profound_conv"],
         required=True,
         type=str,
     )
